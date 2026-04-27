@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Macro-Financial Valuation Lab — Solow + CAPM + Gordon</title>
+    <meta
+      name="description"
+      content="Interactive Solow-Swan growth, CAPM, Gordon Growth, and Monte Carlo justified-P/E model. Move sliders, watch valuations update live."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">∑</span>
+        <div>
+          <h1>Macro-Financial Valuation Lab</h1>
+          <p class="tagline">Solow-Swan · CAPM · Gordon Growth · Monte Carlo</p>
+        </div>
+      </div>
+      <nav class="actions">
+        <button id="reset-btn" class="ghost">Reset defaults</button>
+        <a class="ghost" href="https://github.com/alanvaa06/economics_cobbdouglas" target="_blank" rel="noreferrer">
+          Source
+        </a>
+      </nav>
+    </header>
+
+    <main>
+      <aside class="sidebar">
+        <section class="panel">
+          <h2>Solow-Swan</h2>
+          <div class="param" data-id="s">
+            <label>Savings rate <small>s</small></label>
+            <input type="range" id="s" min="0" max="0.6" step="0.01" value="0.20" />
+            <output></output>
+          </div>
+          <div class="param" data-id="n">
+            <label>Population growth <small>n</small></label>
+            <input type="range" id="n" min="0" max="0.05" step="0.001" value="0.005" />
+            <output></output>
+          </div>
+          <div class="param" data-id="g">
+            <label>Tech progress <small>g</small></label>
+            <input type="range" id="g" min="0" max="0.05" step="0.001" value="0.02" />
+            <output></output>
+          </div>
+          <div class="param" data-id="delta">
+            <label>Depreciation <small>δ</small></label>
+            <input type="range" id="delta" min="0" max="0.2" step="0.005" value="0.05" />
+            <output></output>
+          </div>
+          <div class="param" data-id="alpha">
+            <label>Capital elasticity <small>α</small></label>
+            <input type="range" id="alpha" min="0.1" max="0.7" step="0.01" value="0.35" />
+            <output></output>
+          </div>
+          <div class="param" data-id="T">
+            <label>Periods <small>T</small></label>
+            <input type="range" id="T" min="50" max="500" step="10" value="200" />
+            <output></output>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Financial</h2>
+          <div class="param" data-id="beta">
+            <label>Beta <small>β</small></label>
+            <input type="range" id="beta" min="0" max="2" step="0.05" value="1.00" />
+            <output></output>
+          </div>
+          <div class="param" data-id="erp">
+            <label>Equity risk premium</label>
+            <input type="range" id="erp" min="0.01" max="0.10" step="0.001" value="0.05" />
+            <output></output>
+          </div>
+          <div class="param" data-id="inflation">
+            <label>Expected inflation <small>π</small></label>
+            <input type="range" id="inflation" min="0" max="0.08" step="0.001" value="0.02" />
+            <output></output>
+          </div>
+          <div class="param" data-id="termPremium">
+            <label>Term premium</label>
+            <input type="range" id="termPremium" min="0" max="0.03" step="0.001" value="0.01" />
+            <output></output>
+          </div>
+          <div class="param" data-id="retention">
+            <label>Retention rate <small>b</small></label>
+            <input type="range" id="retention" min="0" max="0.9" step="0.01" value="0.35" />
+            <output></output>
+          </div>
+          <div class="param" data-id="egf">
+            <label>Earnings growth factor</label>
+            <input type="range" id="egf" min="0.5" max="2.5" step="0.05" value="1.10" />
+            <output></output>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Monte Carlo</h2>
+          <div class="param" data-id="numSims">
+            <label>Simulations</label>
+            <input type="range" id="numSims" min="500" max="20000" step="500" value="5000" />
+            <output></output>
+          </div>
+          <div class="param" data-id="gStd">
+            <label>g std-dev</label>
+            <input type="range" id="gStd" min="0" max="0.01" step="0.0005" value="0.005" />
+            <output></output>
+          </div>
+          <div class="param" data-id="inflStd">
+            <label>π std-dev</label>
+            <input type="range" id="inflStd" min="0" max="0.02" step="0.0005" value="0.005" />
+            <output></output>
+          </div>
+          <div class="param" data-id="tpStd">
+            <label>term-premium std-dev</label>
+            <input type="range" id="tpStd" min="0" max="0.01" step="0.0005" value="0.002" />
+            <output></output>
+          </div>
+          <button id="run-mc" class="primary">Run Monte Carlo</button>
+        </section>
+      </aside>
+
+      <section class="content">
+        <section class="kpis">
+          <div class="kpi">
+            <span>Real growth</span>
+            <strong id="kpi-real">—</strong>
+          </div>
+          <div class="kpi">
+            <span>Nominal growth</span>
+            <strong id="kpi-nominal">—</strong>
+          </div>
+          <div class="kpi">
+            <span>Risk-free rate</span>
+            <strong id="kpi-rf">—</strong>
+          </div>
+          <div class="kpi">
+            <span>Required return</span>
+            <strong id="kpi-rr">—</strong>
+          </div>
+          <div class="kpi highlight">
+            <span>Justified forward P/E</span>
+            <strong id="kpi-pe">—</strong>
+          </div>
+        </section>
+
+        <nav class="tabs" role="tablist">
+          <button class="tab active" data-tab="solow" role="tab">Solow growth path</button>
+          <button class="tab" data-tab="gdp" role="tab">GDP sensitivity</button>
+          <button class="tab" data-tab="pe" role="tab">P/E sensitivity</button>
+          <button class="tab" data-tab="mc" role="tab">Monte Carlo</button>
+        </nav>
+
+        <section class="charts">
+          <div id="chart-solow" class="chart"></div>
+          <div id="chart-gdp" class="chart hidden"></div>
+          <div id="chart-pe" class="chart hidden"></div>
+          <div id="chart-mc" class="chart-grid hidden">
+            <div id="chart-mc-pe" class="chart"></div>
+            <div id="chart-mc-eg" class="chart"></div>
+          </div>
+        </section>
+
+        <section class="formulae">
+          <h3>Model</h3>
+          <ul>
+            <li><code>Y = K^α · (A·L)^(1-α)</code> &nbsp;— Cobb-Douglas production</li>
+            <li><code>K_{t+1} = (1+n+g) · (K_t + s·Y_t − δ·K_t)</code> &nbsp;— capital accumulation</li>
+            <li><code>R_f = g_real + π + TP</code> &nbsp;— Fisher + term premium</li>
+            <li><code>k_e = R_f + β · ERP</code> &nbsp;— CAPM</li>
+            <li><code>P/E = (1 − b) / (k_e − g_e)</code> &nbsp;— Gordon Growth Model</li>
+          </ul>
+          <p class="muted">
+            Educational tool — not investment advice. Steady-state growth converges to <code>(n + g) · 100</code>%.
+          </p>
+        </section>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

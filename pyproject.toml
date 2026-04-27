@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "economics-cobb-douglas"
+version = "1.1.0"
+description = "Solow-Swan + CAPM + Gordon Growth + Monte Carlo: justified-P/E from macro fundamentals."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+authors = [
+  { name = "Economics Cobb-Douglas contributors" },
+]
+keywords = ["economics", "solow", "cobb-douglas", "capm", "gordon-growth", "monte-carlo", "valuation"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Financial and Insurance Industry",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Mathematics",
+  "Topic :: Office/Business :: Financial",
+]
+dependencies = [
+  "numpy>=1.22",
+  "matplotlib>=3.5",
+]
+
+[project.optional-dependencies]
+notebook = ["jupyter>=1.0", "ipywidgets>=8.0"]
+dev = ["pytest>=7", "pytest-cov>=4", "ruff>=0.4", "mypy>=1.7"]
+
+[project.urls]
+Homepage = "https://github.com/alanvaa06/economics_cobbdouglas"
+Source = "https://github.com/alanvaa06/economics_cobbdouglas"
+Issues = "https://github.com/alanvaa06/economics_cobbdouglas/issues"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+extend-select = ["I", "B", "UP"]
