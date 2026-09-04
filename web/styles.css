@@ -310,3 +310,82 @@ main {
   font-size: 0.92em;
 }
 .formulae .muted { color: var(--muted); margin-top: 0.6rem; font-size: 0.85rem; }
+
+/* ---- v2 additions: hints, notes, implied panel ---- */
+.hint {
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+.hint b { color: var(--text); font-weight: 600; }
+
+.note {
+  margin: -0.25rem 0 0;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--border));
+  background: color-mix(in srgb, var(--warn) 12%, var(--panel));
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 0.85rem;
+}
+.note[hidden] { display: none; }
+
+.param input[type="number"] {
+  grid-column: 1 / 3;
+  width: 100%;
+  margin: 0.35rem 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+}
+
+.implied {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 1rem;
+  align-items: stretch;
+  padding: 0.9rem 1rem;
+}
+@media (max-width: 900px) {
+  .implied { grid-template-columns: 1fr; }
+}
+.implied h2 { margin-bottom: 0.4rem; }
+.implied-input label {
+  display: block;
+  font-size: 0.85rem;
+  margin-bottom: 0.25rem;
+}
+.implied-input input {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+}
+.implied-out {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0.5rem 0.8rem;
+  border-left: 1px solid var(--border);
+}
+.implied-out span {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.implied-out strong {
+  font-size: 1.4rem;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.implied-out small { color: var(--muted); font-size: 0.75rem; }

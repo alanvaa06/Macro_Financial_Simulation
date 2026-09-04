@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "economics-cobb-douglas"
-version = "1.1.0"
-description = "Solow-Swan + CAPM + Gordon Growth + Monte Carlo: justified-P/E from macro fundamentals."
+version = "2.0.0"
+description = "Solow-Swan + CAPM + Gordon Growth + Monte Carlo: justified-P/E, tornado sensitivity and implied-growth inversion from macro fundamentals."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.9"
@@ -37,9 +37,9 @@ notebook = ["jupyter>=1.0", "ipywidgets>=8.0"]
 dev = ["pytest>=7", "pytest-cov>=4", "ruff>=0.4", "mypy>=1.7"]
 
 [project.urls]
-Homepage = "https://github.com/alanvaa06/economics_cobbdouglas"
-Source = "https://github.com/alanvaa06/economics_cobbdouglas"
-Issues = "https://github.com/alanvaa06/economics_cobbdouglas/issues"
+Homepage = "https://github.com/alanvaa06/Macro_Financial_Simulation"
+Source = "https://github.com/alanvaa06/Macro_Financial_Simulation"
+Issues = "https://github.com/alanvaa06/Macro_Financial_Simulation/issues"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
@@ -50,6 +50,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+filterwarnings = ["error::RuntimeWarning"]
 
 [tool.ruff]
 line-length = 100

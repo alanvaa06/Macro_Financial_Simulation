@@ -6,10 +6,11 @@
     <title>Macro-Financial Valuation Lab — Solow + CAPM + Gordon</title>
     <meta
       name="description"
-      content="Interactive Solow-Swan growth, CAPM, Gordon Growth, and Monte Carlo justified-P/E model. Move sliders, watch valuations update live."
+      content="Interactive Solow-Swan growth, CAPM, Gordon Growth, and Monte Carlo justified-P/E model with tornado sensitivity and implied-growth inversion."
     />
     <link rel="stylesheet" href="./styles.css" />
-    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+    <!-- Partial bundle (scatter, bar, histogram): ~1/3 the size of the full plotly.js build. -->
+    <script src="https://cdn.plot.ly/plotly-cartesian-2.35.2.min.js" charset="utf-8"></script>
   </head>
   <body>
     <header class="topbar">
@@ -21,8 +22,9 @@
         </div>
       </div>
       <nav class="actions">
+        <button id="export-btn" class="ghost" title="Download parameters, valuation, tornado, implied values and Monte Carlo summary as JSON">Export JSON</button>
         <button id="reset-btn" class="ghost">Reset defaults</button>
-        <a class="ghost" href="https://github.com/alanvaa06/economics_cobbdouglas" target="_blank" rel="noreferrer">
+        <a class="ghost" href="https://github.com/alanvaa06/Macro_Financial_Simulation" target="_blank" rel="noreferrer">
           Source
         </a>
       </nav>
@@ -32,11 +34,7 @@
       <aside class="sidebar">
         <section class="panel">
           <h2>Solow-Swan</h2>
-          <div class="param" data-id="s">
-            <label>Savings rate <small>s</small></label>
-            <input type="range" id="s" min="0" max="0.6" step="0.01" value="0.20" />
-            <output></output>
-          </div>
+          <p class="hint">Only <b>n</b> and <b>g</b> move the steady state. <b>s, δ, α, T</b> shape the convergence path.</p>
           <div class="param" data-id="n">
             <label>Population growth <small>n</small></label>
             <input type="range" id="n" min="0" max="0.05" step="0.001" value="0.005" />
@@ -45,6 +43,11 @@
           <div class="param" data-id="g">
             <label>Tech progress <small>g</small></label>
             <input type="range" id="g" min="0" max="0.05" step="0.001" value="0.02" />
+            <output></output>
+          </div>
+          <div class="param" data-id="s">
+            <label>Savings rate <small>s</small></label>
+            <input type="range" id="s" min="0.01" max="0.6" step="0.01" value="0.20" />
             <output></output>
           </div>
           <div class="param" data-id="delta">
@@ -59,7 +62,7 @@
           </div>
           <div class="param" data-id="T">
             <label>Periods <small>T</small></label>
-            <input type="range" id="T" min="50" max="500" step="10" value="200" />
+            <input type="range" id="T" min="20" max="500" step="10" value="200" />
             <output></output>
           </div>
         </section>
@@ -73,7 +76,7 @@
           </div>
           <div class="param" data-id="erp">
             <label>Equity risk premium</label>
-            <input type="range" id="erp" min="0.01" max="0.10" step="0.001" value="0.05" />
+            <input type="range" id="erp" min="0" max="0.10" step="0.001" value="0.05" />
             <output></output>
           </div>
           <div class="param" data-id="inflation">
@@ -96,13 +99,19 @@
             <input type="range" id="egf" min="0.5" max="2.5" step="0.05" value="1.10" />
             <output></output>
           </div>
+          <div class="param" data-id="highGrowthYears">
+            <label>High-growth years <small>two-stage</small></label>
+            <input type="range" id="highGrowthYears" min="0" max="30" step="1" value="0" />
+            <output></output>
+          </div>
         </section>
 
         <section class="panel">
           <h2>Monte Carlo</h2>
+          <p class="hint">Means follow the sliders above. Live, seeded, vectorised.</p>
           <div class="param" data-id="numSims">
             <label>Simulations</label>
-            <input type="range" id="numSims" min="500" max="20000" step="500" value="5000" />
+            <input type="range" id="numSims" min="500" max="50000" step="500" value="5000" />
             <output></output>
           </div>
           <div class="param" data-id="gStd">
@@ -116,11 +125,25 @@
             <output></output>
           </div>
           <div class="param" data-id="tpStd">
-            <label>term-premium std-dev</label>
+            <label>Term-premium std-dev</label>
             <input type="range" id="tpStd" min="0" max="0.01" step="0.0005" value="0.002" />
             <output></output>
           </div>
-          <button id="run-mc" class="primary">Run Monte Carlo</button>
+          <div class="param" data-id="erpStd">
+            <label>ERP std-dev</label>
+            <input type="range" id="erpStd" min="0" max="0.03" step="0.0005" value="0" />
+            <output></output>
+          </div>
+          <div class="param" data-id="rho">
+            <label>Corr(π, term premium) <small>ρ</small></label>
+            <input type="range" id="rho" min="-0.9" max="0.9" step="0.05" value="0" />
+            <output></output>
+          </div>
+          <div class="param" data-id="seed">
+            <label>Seed</label>
+            <input type="number" id="seed" min="0" max="999999" step="1" value="42" />
+            <output></output>
+          </div>
         </section>
       </aside>
 
@@ -142,23 +165,52 @@
             <span>Required return</span>
             <strong id="kpi-rr">—</strong>
           </div>
+          <div class="kpi">
+            <span>P/E duration</span>
+            <strong id="kpi-duration">—</strong>
+          </div>
+          <div class="kpi" title="Simulated final-period growth minus the closed-form steady state. Red when the path has not converged.">
+            <span>Convergence gap</span>
+            <strong id="kpi-gap">—</strong>
+          </div>
           <div class="kpi highlight">
             <span>Justified forward P/E</span>
             <strong id="kpi-pe">—</strong>
           </div>
         </section>
+        <p id="pe-note" class="note" hidden>
+          ⚠ Earnings are assumed to outgrow nominal GDP <em>forever</em> (factor &gt; 1, single stage). Set high-growth years &gt; 0 to bound it.
+        </p>
+
+        <section class="implied panel">
+          <div class="implied-input">
+            <h2>What does the market imply?</h2>
+            <label for="targetPE">Observed forward P/E</label>
+            <input type="number" id="targetPE" min="1" max="100" step="0.5" value="18" />
+          </div>
+          <div class="implied-out">
+            <span>Implied tech progress g</span>
+            <strong id="implied-g">—</strong>
+            <small id="implied-g-range"></small>
+          </div>
+          <div class="implied-out">
+            <span>Implied equity risk premium</span>
+            <strong id="implied-erp">—</strong>
+            <small id="implied-erp-range"></small>
+          </div>
+        </section>
 
         <nav class="tabs" role="tablist">
-          <button class="tab active" data-tab="solow" role="tab">Solow growth path</button>
-          <button class="tab" data-tab="gdp" role="tab">GDP sensitivity</button>
+          <button class="tab active" data-tab="solow" role="tab">Convergence path</button>
           <button class="tab" data-tab="pe" role="tab">P/E sensitivity</button>
+          <button class="tab" data-tab="tornado" role="tab">Tornado</button>
           <button class="tab" data-tab="mc" role="tab">Monte Carlo</button>
         </nav>
 
         <section class="charts">
           <div id="chart-solow" class="chart"></div>
-          <div id="chart-gdp" class="chart hidden"></div>
           <div id="chart-pe" class="chart hidden"></div>
+          <div id="chart-tornado" class="chart hidden"></div>
           <div id="chart-mc" class="chart-grid hidden">
             <div id="chart-mc-pe" class="chart"></div>
             <div id="chart-mc-eg" class="chart"></div>
@@ -169,13 +221,15 @@
           <h3>Model</h3>
           <ul>
             <li><code>Y = K^α · (A·L)^(1-α)</code> &nbsp;— Cobb-Douglas production</li>
-            <li><code>K_{t+1} = (1+n+g) · (K_t + s·Y_t − δ·K_t)</code> &nbsp;— capital accumulation</li>
+            <li><code>K_{t+1} = (1 − δ)·K_t + s·Y_t</code> &nbsp;— capital accumulation (textbook)</li>
+            <li><code>g_real = (1+n)(1+g) − 1</code> &nbsp;— steady-state growth (closed form; the simulation is a convergence check)</li>
             <li><code>R_f = g_real + π + TP</code> &nbsp;— Fisher + term premium</li>
             <li><code>k_e = R_f + β · ERP</code> &nbsp;— CAPM</li>
-            <li><code>P/E = (1 − b) / (k_e − g_e)</code> &nbsp;— Gordon Growth Model</li>
+            <li><code>P/E = (1 − b) / (k_e − g_e)</code> &nbsp;— Gordon Growth (single stage), or two-stage with terminal growth = nominal GDP</li>
+            <li><code>D = −(∂P/E ∕ ∂k_e) ∕ (P/E)</code> &nbsp;— P/E duration (years); = 1 / (k_e − g_e) single stage</li>
           </ul>
           <p class="muted">
-            Educational tool — not investment advice. Steady-state growth converges to <code>(n + g) · 100</code>%.
+            Educational tool — not investment advice. Steady-state Y/K = ((1+n)(1+g) − (1−δ)) / s.
           </p>
         </section>
       </section>
