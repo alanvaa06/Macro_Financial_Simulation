@@ -2,36 +2,42 @@
 
 from __future__ import annotations
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 from .core import (
-    SolowParameters,
     FinancialParameters,
     MonteCarloParameters,
-    simulate_solow,
+    SolowParameters,
+    closed_form_growth_rate,
+    convergence_gap,
     gdp_sensitivity,
+    justified_pe,
+    monte_carlo,
     pe_sensitivity,
-    monte_carlo_pe,
+    simulate_solow,
+    tornado,
 )
 
 
 def plot_solow_growth(p: SolowParameters, ax=None):
+    """Simulated growth path against the closed-form steady state."""
     path = simulate_solow(p)
     if ax is None:
         _, ax = plt.subplots(figsize=(10, 5))
-    ax.plot(np.arange(1, p.T), path.growth_rates, color="#0ea5a4", linewidth=2)
-    ax.axhline((p.n + p.g) * 100, ls="--", color="#94a3b8", label="n+g (theoretical)")
+    ax.plot(np.arange(1, p.T), path.growth_rates, color="#0ea5a4", linewidth=2, label="simulated")
+    target = float(closed_form_growth_rate(p.n, p.g))
+    ax.axhline(target, ls="--", color="#94a3b8", label="(1+n)(1+g)−1")
     ax.set_xlabel("Period")
     ax.set_ylabel("YoY output growth (%)")
-    ax.set_title("Solow-Swan output growth path")
+    ax.set_title(f"Solow-Swan convergence (gap at T: {convergence_gap(p):+.4f} pp)")
     ax.grid(True, alpha=0.3)
     ax.legend()
     return ax
 
 
-def plot_gdp_sensitivity(p: SolowParameters, ax=None):
-    g_grid, gdp = gdp_sensitivity(p)
+def plot_gdp_sensitivity(p: SolowParameters, ax=None, method="closed_form"):
+    g_grid, gdp = gdp_sensitivity(p, method=method)
     if ax is None:
         _, ax = plt.subplots(figsize=(10, 5))
     ax.plot(g_grid * 100, gdp, marker="o", color="#6366f1")
@@ -54,14 +60,37 @@ def plot_pe_sensitivity(p: SolowParameters, fin: FinancialParameters, ax=None):
     return ax
 
 
+def plot_tornado(p: SolowParameters, fin: FinancialParameters, ax=None, shocks=None):
+    """Horizontal tornado chart: P/E swing per driver around the base case."""
+    rows = tornado(p, fin, shocks)
+    base = justified_pe(p, fin).justified_pe
+    if ax is None:
+        _, ax = plt.subplots(figsize=(10, 5))
+    labels = [r.parameter for r in rows][::-1]
+    lows = [np.nan if r.pe_low is None else r.pe_low for r in rows][::-1]
+    highs = [np.nan if r.pe_high is None else r.pe_high for r in rows][::-1]
+    y = np.arange(len(rows))
+    if base is not None:
+        ax.barh(y, np.array(lows) - base, left=base, color="#ef4444", alpha=0.8, label="− shock")
+        ax.barh(y, np.array(highs) - base, left=base, color="#0ea5a4", alpha=0.8, label="+ shock")
+        ax.axvline(base, color="black", lw=1)
+    ax.set_yticks(y)
+    ax.set_yticklabels(labels)
+    ax.set_xlabel("Justified forward P/E")
+    ax.set_title("Tornado: one-at-a-time sensitivity")
+    ax.grid(True, axis="x", alpha=0.3)
+    ax.legend()
+    return ax
+
+
 def plot_monte_carlo(
     p: SolowParameters,
     fin: FinancialParameters,
     mc: MonteCarloParameters,
 ):
-    pe, eg = monte_carlo_pe(p, fin, mc)
-    pe = pe[~np.isnan(pe)]
-    eg = eg[~np.isnan(eg)] * 100
+    res = monte_carlo(p, fin, mc)
+    pe = res.pe[~np.isnan(res.pe)]
+    eg = res.earnings_growth * 100
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 4.5))
     for ax, data, color, title, xlabel in (
@@ -81,7 +110,12 @@ def plot_monte_carlo(
         ax.set_ylabel("Frequency")
         ax.grid(True, alpha=0.3)
         ax.legend()
-
+    s = res.summary
+    fig.suptitle(
+        f"n={s.n}, invalid={s.invalid_share:.1%}, "
+        f"P5/P50/P95 = {s.percentiles.get(5, float('nan')):.2f} / "
+        f"{s.percentiles.get(50, float('nan')):.2f} / {s.percentiles.get(95, float('nan')):.2f}"
+    )
     fig.tight_layout()
     return fig
 
@@ -91,21 +125,23 @@ def dashboard(
     fin: FinancialParameters,
     mc: MonteCarloParameters,
 ):
-    """Single 2x2 figure with all four panels."""
+    """Single 2x2 figure: convergence, P/E sensitivity, tornado, Monte Carlo."""
     fig, axes = plt.subplots(2, 2, figsize=(15, 10))
     plot_solow_growth(p, ax=axes[0, 0])
-    plot_gdp_sensitivity(p, ax=axes[0, 1])
-    plot_pe_sensitivity(p, fin, ax=axes[1, 0])
+    plot_pe_sensitivity(p, fin, ax=axes[0, 1])
+    plot_tornado(p, fin, ax=axes[1, 0])
 
-    pe, _ = monte_carlo_pe(p, fin, mc)
-    pe = pe[~np.isnan(pe)]
+    res = monte_carlo(p, fin, mc)
+    pe = res.pe[~np.isnan(res.pe)]
     ax = axes[1, 1]
     if len(pe):
-        mean = float(np.mean(pe))
+        s = res.summary
         ax.hist(pe, bins=30, alpha=0.75, color="#6366f1", edgecolor="white")
-        ax.axvline(mean, color="black", ls="--", lw=1, label=f"mean={mean:.2f}")
+        ax.axvline(s.mean, color="black", ls="--", lw=1, label=f"mean={s.mean:.2f}")
+        ax.axvline(s.percentiles[5], color="#ef4444", ls=":", lw=1, label="P5 / P95")
+        ax.axvline(s.percentiles[95], color="#ef4444", ls=":", lw=1)
         ax.legend()
-    ax.set_title("Monte Carlo P/E distribution")
+    ax.set_title(f"Monte Carlo P/E distribution (invalid {res.summary.invalid_share:.1%})")
     ax.set_xlabel("P/E ratio")
     ax.set_ylabel("Frequency")
     ax.grid(True, alpha=0.3)

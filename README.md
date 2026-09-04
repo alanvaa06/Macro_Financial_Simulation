@@ -1,48 +1,38 @@
 # Macro-Financial Valuation Lab
 
 > Solow-Swan growth → CAPM → Gordon Growth → Monte Carlo, in one integrated model.
-> Move sliders, watch the **justified forward P/E** update in real time.
+> Move sliders, watch the **justified forward P/E** update in real time — then ask the model what a market multiple *implies*.
 
-This repository contains an integrated macro-financial valuation framework. A Solow-Swan growth model with a Cobb-Douglas production function feeds a steady-state real growth rate into a CAPM-based required return, which a Gordon Growth Model then turns into a justified forward P/E ratio. A Monte Carlo layer quantifies the uncertainty around that estimate.
+An integrated macro-financial valuation framework. Long-run real growth from a Solow-Swan model feeds a CAPM required return, which a Gordon Growth model (single- or two-stage) turns into a justified forward P/E. Around that point estimate you get a tornado sensitivity, a vectorised Monte Carlo distribution, P/E duration, scenario comparison, and inversion (implied technology growth and implied equity risk premium for an observed P/E).
 
 You can use it three ways:
 
 1. **Open `web/index.html` in a browser** — zero install, fully interactive.
-2. **`import economics_models`** — clean, typed Python API for analysts and notebooks.
-3. **Open `EconomicGrowth.ipynb`** — the original research notebook (kept for reference).
+2. **`import economics_models`** — typed Python API for analysts and notebooks.
+3. **Open `EconomicGrowth.ipynb`** — the original research notebook. *Historical reference only*: it predates the v2 model conventions below and its defaults differ from the package.
 
 ---
 
-## 1. Web interface (recommended)
-
-Just open the file:
+## 1. Web interface
 
 ```bash
-# from the repo root
-xdg-open web/index.html        # Linux
-open web/index.html            # macOS
-start web\index.html           # Windows
+python -m http.server 8000 --directory web   # then visit http://localhost:8000
 ```
 
-Or serve it locally (any static server works):
-
-```bash
-python -m http.server 8000 --directory web
-# then visit http://localhost:8000
-```
-
-Or push to GitHub Pages — the `web/` folder is fully self-contained (only depends on Plotly via CDN).
+or just open the file. The `web/` folder is self-contained apart from Plotly (partial `cartesian` bundle via CDN).
 
 ### What you get
 
-- **Live KPIs** for real growth, nominal growth, risk-free rate, required return, and justified P/E.
-- **Solow growth path** chart with the theoretical `(1+n)(1+g) − 1` reference line.
-- **Sensitivity sweeps**: GDP growth vs. tech progress, P/E vs. tech progress.
-- **Monte Carlo** distributions for P/E and earnings growth.
-- **Dark / light mode** that follows your OS preference.
-- **Reset to defaults** button.
+- **Live KPIs**: real and nominal growth, risk-free rate, required return, justified P/E, **P/E duration**, and a **convergence gap** that turns red when the simulated Solow path has not reached its steady state.
+- **What does the market imply?** Enter an observed forward P/E and read off the implied technology growth and the implied equity risk premium, with the reachable range shown when the target is out of bounds.
+- **Convergence path**: simulated growth against the closed-form steady state.
+- **P/E sensitivity** to technology growth.
+- **Tornado**: one-at-a-time ± shocks on all eight drivers, ranked by P/E swing.
+- **Monte Carlo**: live, seeded, vectorised; reports μ, σ, P5–P95 and the **share of invalid draws**; optional ERP uncertainty and inflation/term-premium correlation.
+- **Export JSON**: parameters, valuation, tornado, implied values and Monte Carlo summary in one file.
+- Dark / light mode, reset to defaults.
 
-The JS implementation in `web/app.js` mirrors the Python math in `src/economics_models/core.py` line for line — both produce the same numbers (verified in tests).
+`web/app.js` is a line-for-line port of `src/economics_models/core.py`. Parity is enforced by `tests/test_js_parity.py`, which runs the JS under Node.js on identical inputs (including injected Monte Carlo draws) and compares every number.
 
 ---
 
@@ -62,28 +52,41 @@ pip install -e .[notebook]      # + jupyter & ipywidgets for the notebook
 ```python
 from economics_models import (
     SolowParameters, FinancialParameters, MonteCarloParameters,
-    steady_state_growth_rate, justified_pe, monte_carlo_pe,
-    dashboard,
+    justified_pe, tornado, monte_carlo,
+    implied_technology_growth, implied_equity_risk_premium,
+    compare_scenarios, scenarios_to_csv, dashboard,
 )
 
-solow = SolowParameters(s=0.20, n=0.005, g=0.02, delta=0.05, alpha=0.35)
+solow = SolowParameters(n=0.005, g=0.02)
 fin   = FinancialParameters(beta=1.0, equity_risk_premium=0.05,
                             expected_inflation=0.02, term_premium=0.01,
                             retention_rate=0.35, earnings_growth_factor=1.10)
 
-print(f"Steady-state growth: {steady_state_growth_rate(solow):.3f}%")
+res = justified_pe(solow, fin)
+print(f"Justified forward P/E: {res.justified_pe:.2f}   duration: {res.pe_duration:.1f} yrs")
 
-result = justified_pe(solow, fin)
-print(f"Justified forward P/E: {result.justified_pe:.2f}")
-print(f"Required return: {result.required_return:.2%}")
+# What does a market P/E of 18 imply, holding everything else fixed?
+print(implied_technology_growth(18.0, solow, fin))     # None if unreachable for g in [0, 10%]
+print(implied_equity_risk_premium(18.0, solow, fin))   # ERP that reproduces 18x
 
-mc = MonteCarloParameters(num_simulations=5_000, seed=42)
-pe, eg = monte_carlo_pe(solow, fin, mc)
-print(f"P/E mean ± std (MC): {pe.mean():.2f} ± {pe.std():.2f}")
+# Which assumptions matter most?
+for row in tornado(solow, fin)[:3]:
+    print(row.parameter, round(row.swing, 2))
 
-# All-in-one matplotlib dashboard
-fig = dashboard(solow, fin, mc)
-fig.savefig("dashboard.png", dpi=120)
+# Uncertainty, with the invalid share reported instead of silently dropped
+mc = monte_carlo(solow, fin, MonteCarloParameters(num_simulations=20_000, seed=42))
+print(mc.summary.mean, mc.summary.percentiles[5], mc.summary.percentiles[95], mc.summary.invalid_share)
+
+# Scenarios
+table = compare_scenarios({
+    "bear": (solow, FinancialParameters(equity_risk_premium=0.07)),
+    "base": (solow, fin),
+    "bull": (solow, FinancialParameters(equity_risk_premium=0.04)),
+})
+print(scenarios_to_csv(table))
+
+# Matplotlib dashboard: convergence, P/E sensitivity, tornado, Monte Carlo
+dashboard(solow, fin, MonteCarloParameters(seed=42)).savefig("dashboard.png", dpi=120)
 ```
 
 ### Public API
@@ -91,12 +94,16 @@ fig.savefig("dashboard.png", dpi=120)
 | Symbol | Purpose |
 |---|---|
 | `SolowParameters`, `FinancialParameters`, `MonteCarloParameters` | Validated dataclass inputs |
+| `steady_state_growth_rate(p, method="closed_form")` | Real growth % fed to the valuation (`"simulated"` = final-period path value) |
+| `convergence_gap(p)`, `steady_state_output_capital_ratio(p)` | Solow diagnostics |
 | `simulate_solow(p) -> SolowPath` | Full K, Y, A, L, growth-rate trajectory |
-| `steady_state_growth_rate(p)` | Final-period YoY % growth |
-| `justified_pe(solow, fin) -> ValuationResult` | Full valuation pipeline |
-| `gdp_sensitivity(solow, ...)` | Sweep `g` → steady-state growth |
-| `pe_sensitivity(solow, fin, ...)` | Sweep `g` → justified P/E |
-| `monte_carlo_pe(solow, fin, mc)` | Distribution of P/E and earnings growth |
+| `justified_pe(solow, fin) -> ValuationResult` | Valuation pipeline incl. `pe_duration` and `earnings_outgrow_gdp` flag |
+| `gdp_sensitivity`, `pe_sensitivity` | Sweeps over technology growth `g` |
+| `tornado(solow, fin, shocks=None)` | One-at-a-time ± shocks, sorted by swing |
+| `implied_technology_growth`, `implied_equity_risk_premium` | Invert the model for an observed P/E |
+| `compare_scenarios`, `scenarios_to_csv` | Named scenarios → results table |
+| `monte_carlo(...) -> MonteCarloResult` | Vectorised, seeded, optionally correlated draws + summary |
+| `monte_carlo_pe(...)` | Backward-compatible `(pe, eg)` tuple |
 | `plot_*`, `dashboard` | Matplotlib renderers |
 
 ---
@@ -106,95 +113,85 @@ fig.savefig("dashboard.png", dpi=120)
 ### Cobb-Douglas production
 \[ Y_t = K_t^{\alpha} (A_t L_t)^{1-\alpha} \]
 
-### Capital accumulation (per the Solow-Swan formulation in this codebase)
-\[ K_{t+1} = (1 + n + g)\,(K_t + s\,Y_t - \delta\,K_t) \]
-with \(L_{t+1} = L_t(1+n)\) and \(A_{t+1} = A_t(1+g)\).
+### Capital accumulation (textbook aggregate form)
+\[ K_{t+1} = (1-\delta)K_t + s\,Y_t,\qquad L_{t+1} = L_t(1+n),\qquad A_{t+1} = A_t(1+g) \]
+Steady-state output/capital ratio: \(Y/K = \big((1+n)(1+g) - (1-\delta)\big)/s\).
 
 ### Steady-state growth
-Output grows at the rate at which effective labor grows: **\((1+n)(1+g) − 1\)** per period (≈ \(n+g\) for small values). This is the *real* growth rate fed into the financial layer.
+Aggregate output grows at the rate of effective labour: **\(g_{real} = (1+n)(1+g) − 1\)**. This closed form is what feeds the valuation. It does **not** depend on \(s, \delta, \alpha, K_0\) or \(T\) — those only shape the convergence path, which the UI shows as a diagnostic.
 
-### Risk-free rate (Fisher + term premium)
-\[ R_f = g_{real} + \pi + TP \]
+### Risk-free rate and CAPM
+\[ R_f = g_{real} + \pi + TP,\qquad k_e = R_f + \beta \cdot ERP \]
 
-### CAPM required return
-\[ k_e = R_f + \beta \cdot ERP \]
+### Justified forward P/E
+Single stage (Gordon): \(P/E = (1-b)/(k_e - g_e)\) with \(g_e = g_{nominal}\cdot\text{factor}\).
 
-### Gordon Growth justified forward P/E
-\[ P/E = \frac{1 - b}{k_e - g_e},\quad g_e = g_{nominal} \cdot \text{TFP factor} \]
+Two stage (`high_growth_years = N`): earnings grow at \(g_e\) for \(N\) years, then at nominal GDP growth forever:
+\[ \frac{P_0}{E_1} = (1-b)\left[\sum_{t=1}^{N}\frac{(1+g_e)^{t-1}}{(1+k_e)^t} + \frac{(1+g_e)^{N-1}(1+g_{nom})}{(k_e-g_{nom})(1+k_e)^N}\right] \]
 
-The model is **invalid** (and the UI flags it) when \(g_e \ge k_e\) — no finite present value exists.
+The model is **invalid** (UI flags it red, Python returns `justified_pe=None`) when the *terminal* growth rate is ≥ \(k_e\).
 
----
-
-## 4. Project layout
-
-```
-.
-├── web/                       # Static, zero-install browser UI
-│   ├── index.html
-│   ├── styles.css
-│   └── app.js                 # JS port of the Python model
-├── src/economics_models/      # Python package
-│   ├── __init__.py
-│   ├── core.py                # Model math + dataclasses (single source of truth)
-│   └── visualization.py       # Matplotlib renderers
-├── tests/
-│   └── test_core.py           # 12 unit tests, all passing
-├── EconomicGrowth.ipynb       # Original research notebook (reference)
-├── pyproject.toml             # Project metadata, deps, ruff, pytest config
-├── requirements.txt           # Runtime deps
-├── requirements-dev.txt       # + dev/test deps
-└── README.md
-```
+### P/E duration
+\(D = -\frac{\partial (P/E)/\partial k_e}{P/E}\), in years. Single stage: \(D = 1/(k_e - g_e)\).
 
 ---
 
-## 5. Best practices for using the model
+## 4. Model conventions (v2) — and why
 
-- **`(1+n)(1+g) − 1` is the asymptote, not `n + g`.** They agree to 1 bp at typical values; for large `g` the difference grows. Tests use the geometric form.
-- **Keep `T ≥ 200`** when you want the steady-state growth rate. Earlier periods are still on the transition path.
-- **Watch the `g_e ≥ k_e` constraint.** Gordon explodes (and lies) near the boundary. The UI marks it red; the Python API returns `justified_pe=None`.
-- **Calibrate Monte Carlo std-devs honestly.** Tiny `std`s create false precision in the resulting distribution. The defaults (`g_std=0.5%`, `π_std=0.5%`, `TP_std=0.2%`) are a starting point, not gospel.
-- **`α` is capital's share of output**, typically 0.30–0.40 for advanced economies.
-- **`b` is the retention rate**; payout ratio is `1 − b`.
-- **`earnings_growth_factor`** scales nominal GDP growth into earnings growth (operating leverage / margin expansion / TFP). > 1 is bullish, < 1 is conservative.
-- **This is a teaching/research tool.** Not investment advice. Treat outputs as conditional on your assumptions.
+These were deliberate choices; each is reversible.
+
+| Question | v1 behaviour | v2 behaviour | Why |
+|---|---|---|---|
+| What is "steady-state growth"? | Final-period growth of a simulated path with `K0=10000`, `T=200` | Closed form \((1+n)(1+g)-1\) | The simulated number depended on an arbitrary `K0` (changing it to 1e6 moved real growth by 21 bp) and on `T`. The closed form is exact and the simulation is kept as a **convergence diagnostic** (`convergence_gap`, `method="simulated"`). |
+| Capital law of motion | \(K_{t+1}=(1+n+g)(K_t+sY_t-\delta K_t)\) | \(K_{t+1}=(1-\delta)K_t+sY_t\) | The v1 form gave a steady-state \(Y/K=\delta/s\) instead of the textbook \((\delta+n+g)/s\). Growth rates were unaffected; levels were not. |
+| Can earnings outgrow GDP forever? | Yes, silently | Flagged (`earnings_outgrow_gdp`); bounded by the two-stage option | A perpetual factor > 1 contradicts the steady state the model just computed. |
+| Monte Carlo means | Python defaulted `g_mean=0.02` regardless of `solow.g`; JS used the slider | Both default to the point estimates | Removed a Python/JS drift. |
+| Invalid Monte Carlo draws | Dropped silently (survivorship bias) | Reported as `invalid_share`; percentiles and standard error included | The bias activates exactly near the \(g_e \ge k_e\) boundary where the model is most interesting. |
+| Default `K0` | 10 000 | 200 | Puts the path below steady state so the convergence chart shows a classic catch-up; irrelevant to the valuation. |
 
 ---
 
-## 6. Development
+## 5. Performance
+
+Monte Carlo is fully vectorised in both implementations (one pass over the draws, no per-draw Solow loop). Measured on a single core:
+
+| | v1 | v2 |
+|---|---|---|
+| Python, 5 000 draws | 1.08 s | ~10 ms |
+| Python, 20 000 draws | 4.32 s | ~30 ms |
+| JS, 20 000 draws | 406 ms | ~40 ms |
+
+The web UI therefore runs Monte Carlo live with the sliders; the "Run" button is gone. Plotly loads the partial `cartesian` bundle instead of the full build.
+
+---
+
+## 6. Best practices
+
+- **Only `n` and `g` move the valuation through the Solow block.** If the convergence gap is red, `T` is too short or `K0` too far from steady state for the *simulated* path to mean anything — but the valuation is unaffected because it uses the closed form.
+- **Watch the terminal-growth constraint.** Gordon explodes near the boundary. Use `high_growth_years` if you want stage-1 growth above nominal GDP.
+- **Use the tornado before the Monte Carlo.** At the defaults, ERP, beta, the earnings growth factor and retention dominate; `g` and inflation barely register. Calibrate std-devs where the swing is.
+- **Inversion returns `None` when unreachable.** The UI shows the reachable P/E range so you can see *why* (e.g. at the defaults no `g` in [0, 10%] reproduces an 18x multiple, but an ERP of about 3.1% does).
+- **This is a teaching/research tool.** Not investment advice.
+
+---
+
+## 7. Development
 
 ```bash
 pip install -e .[dev]
-pytest -q                      # run all tests
-ruff check src tests           # lint
-ruff format src tests          # format
-mypy src                       # type-check
+pytest -q                      # Python tests + JS parity (parity skipped if node is missing)
+ruff check src tests && ruff format --check src tests
+mypy src
 ```
 
-CI-friendly. The `tests/` suite is deterministic (Monte Carlo uses a fixed seed).
+CI (`.github/workflows/ci.yml`) runs lint, type-check and the full suite on Python 3.9 and 3.12 with Node 20.
 
-### Cross-checking JS ↔ Python
+### Contributing
 
-The web UI exposes the model on `window.MacroFin`. To verify the JS port matches Python, open the browser console:
-
-```js
-const p = MacroFin.defaults;
-const path = MacroFin.simulateSolow({...p, T: 200});
-const last = path.growth[path.growth.length - 1];
-console.log(last);   // ≈ 2.49997, same as Python
-```
-
----
-
-## 7. Contributing
-
-1. Fork & branch (`feat/my-thing`).
-2. Add a test in `tests/test_core.py` for any math change.
-3. **Update both `src/economics_models/core.py` and `web/app.js` together** — they are intentionally redundant implementations. Drift between them is a bug.
-4. Run `pytest -q` and `ruff check`.
-5. Open a PR.
+1. Add a test in `tests/test_core.py` for any math change.
+2. **Update both `src/economics_models/core.py` and `web/app.js` together.** `tests/test_js_parity.py` will fail if they drift.
+3. Run the checks above and open a PR.
 
 ## License
 
-MIT. See repository for details.
+MIT.
