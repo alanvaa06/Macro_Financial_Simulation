@@ -146,7 +146,7 @@ def test_two_stage_valid_when_stage1_growth_exceeds_required_return():
 
 
 def test_pe_increases_with_g_when_in_valid_region():
-    g_grid, pe = pe_sensitivity(SolowParameters(), FinancialParameters(), 0.01, 0.025, 8)
+    _g_grid, pe = pe_sensitivity(SolowParameters(), FinancialParameters(), 0.01, 0.025, 8)
     finite = pe[~np.isnan(pe)]
     assert np.all(np.diff(finite) >= -1e-9)
 

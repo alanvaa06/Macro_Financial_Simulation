@@ -33,29 +33,40 @@ RUNNER = ROOT / "tests" / "js_parity_runner.js"
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
 
 CASES = [
-    dict(solow={}, fin={}),
-    dict(
-        solow=dict(g=0.03, n=0.01, s=0.25, alpha=0.4, T=120), fin=dict(beta=1.2, retention_rate=0.5)
-    ),
-    dict(solow={}, fin=dict(earnings_growth_factor=1.4, high_growth_years=10)),
-    dict(solow=dict(g=0.04), fin=dict(earnings_growth_factor=2.0, equity_risk_premium=0.02)),
+    {"solow": {}, "fin": {}},
+    {
+        "solow": {"g": 0.03, "n": 0.01, "s": 0.25, "alpha": 0.4, "T": 120},
+        "fin": {"beta": 1.2, "retention_rate": 0.5},
+    },
+    {"solow": {}, "fin": {"earnings_growth_factor": 1.4, "high_growth_years": 10}},
+    {"solow": {"g": 0.04}, "fin": {"earnings_growth_factor": 2.0, "equity_risk_premium": 0.02}},
 ]
 
 
 def _js_fin(f: FinancialParameters) -> dict:
-    return dict(
-        beta=f.beta,
-        erp=f.equity_risk_premium,
-        inflation=f.expected_inflation,
-        termPremium=f.term_premium,
-        retention=f.retention_rate,
-        egf=f.earnings_growth_factor,
-        highGrowthYears=f.high_growth_years,
-    )
+    return {
+        "beta": f.beta,
+        "erp": f.equity_risk_premium,
+        "inflation": f.expected_inflation,
+        "termPremium": f.term_premium,
+        "retention": f.retention_rate,
+        "egf": f.earnings_growth_factor,
+        "highGrowthYears": f.high_growth_years,
+    }
 
 
 def _js_solow(p: SolowParameters) -> dict:
-    return dict(s=p.s, n=p.n, g=p.g, delta=p.delta, alpha=p.alpha, A0=p.A0, L0=p.L0, K0=p.K0, T=p.T)
+    return {
+        "s": p.s,
+        "n": p.n,
+        "g": p.g,
+        "delta": p.delta,
+        "alpha": p.alpha,
+        "A0": p.A0,
+        "L0": p.L0,
+        "K0": p.K0,
+        "T": p.T,
+    }
 
 
 def _run_js(spec: dict) -> dict:
@@ -77,24 +88,24 @@ def test_js_matches_python(case):
     target_pe = 12.0
 
     js = _run_js(
-        dict(
-            solow=_js_solow(solow),
-            fin=_js_fin(fin),
-            mc=dict(
-                numSims=400,
-                gMean=None,
-                gStd=mc.g_std,
-                inflMean=None,
-                inflStd=mc.inflation_std,
-                tpMean=None,
-                tpStd=mc.term_premium_std,
-                erpStd=mc.erp_std,
-                corr=corr.tolist(),
-                seed=0,
-            ),
-            z=z.tolist(),
-            targetPE=target_pe,
-        )
+        {
+            "solow": _js_solow(solow),
+            "fin": _js_fin(fin),
+            "mc": {
+                "numSims": 400,
+                "gMean": None,
+                "gStd": mc.g_std,
+                "inflMean": None,
+                "inflStd": mc.inflation_std,
+                "tpMean": None,
+                "tpStd": mc.term_premium_std,
+                "erpStd": mc.erp_std,
+                "corr": corr.tolist(),
+                "seed": 0,
+            },
+            "z": z.tolist(),
+            "targetPE": target_pe,
+        }
     )
 
     py = justified_pe(solow, fin)

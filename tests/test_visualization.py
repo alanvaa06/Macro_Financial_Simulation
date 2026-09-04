@@ -6,9 +6,9 @@ import matplotlib
 
 matplotlib.use("Agg")
 
-import matplotlib.pyplot as plt  # noqa: E402
+import matplotlib.pyplot as plt
 
-from economics_models import (  # noqa: E402
+from economics_models import (
     FinancialParameters,
     MonteCarloParameters,
     SolowParameters,
