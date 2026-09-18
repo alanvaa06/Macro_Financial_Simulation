@@ -22,6 +22,7 @@
         </div>
       </div>
       <nav class="actions">
+        <button id="params-toggle" class="ghost mobile-only" aria-controls="sidebar" aria-expanded="false">Parameters</button>
         <button id="export-btn" class="ghost" title="Download parameters, valuation, tornado, implied values and Monte Carlo summary as JSON">Export JSON</button>
         <button id="reset-btn" class="ghost">Reset defaults</button>
         <a class="ghost" href="https://github.com/alanvaa06/Macro_Financial_Simulation" target="_blank" rel="noreferrer">
@@ -31,120 +32,218 @@
     </header>
 
     <main>
-      <aside class="sidebar">
-        <section class="panel">
-          <h2>Solow-Swan</h2>
-          <p class="hint">Only <b>n</b> and <b>g</b> move the steady state. <b>s, δ, α, T</b> shape the convergence path.</p>
-          <div class="param" data-id="n">
-            <label>Population growth <small>n</small></label>
-            <input type="range" id="n" min="0" max="0.05" step="0.001" value="0.005" />
-            <output></output>
+      <div id="sidebar-backdrop" class="sidebar-backdrop" hidden></div>
+      <aside class="sidebar" id="sidebar" aria-label="Model parameters">
+        <div class="sidebar-head">
+          <div>
+            <h2>Parameters</h2>
+            <p class="hint" id="obs-asof">Latest observed values shown under each input.</p>
           </div>
-          <div class="param" data-id="g">
-            <label>Tech progress <small>g</small></label>
-            <input type="range" id="g" min="0" max="0.05" step="0.001" value="0.02" />
-            <output></output>
-          </div>
-          <div class="param" data-id="s">
-            <label>Savings rate <small>s</small></label>
-            <input type="range" id="s" min="0.01" max="0.6" step="0.01" value="0.20" />
-            <output></output>
-          </div>
-          <div class="param" data-id="delta">
-            <label>Depreciation <small>δ</small></label>
-            <input type="range" id="delta" min="0" max="0.2" step="0.005" value="0.05" />
-            <output></output>
-          </div>
-          <div class="param" data-id="alpha">
-            <label>Capital elasticity <small>α</small></label>
-            <input type="range" id="alpha" min="0.1" max="0.7" step="0.01" value="0.35" />
-            <output></output>
-          </div>
-          <div class="param" data-id="T">
-            <label>Periods <small>T</small></label>
-            <input type="range" id="T" min="20" max="500" step="10" value="200" />
-            <output></output>
-          </div>
-        </section>
+          <button id="apply-observed" class="chip-btn" title="Set every parameter that has an observable counterpart to its latest observed value">Use observed</button>
+        </div>
 
-        <section class="panel">
-          <h2>Financial</h2>
-          <div class="param" data-id="beta">
-            <label>Beta <small>β</small></label>
-            <input type="range" id="beta" min="0" max="2" step="0.05" value="1.00" />
-            <output></output>
-          </div>
-          <div class="param" data-id="erp">
-            <label>Equity risk premium</label>
-            <input type="range" id="erp" min="0" max="0.10" step="0.001" value="0.05" />
-            <output></output>
-          </div>
-          <div class="param" data-id="inflation">
-            <label>Expected inflation <small>π</small></label>
-            <input type="range" id="inflation" min="0" max="0.08" step="0.001" value="0.02" />
-            <output></output>
-          </div>
-          <div class="param" data-id="termPremium">
-            <label>Term premium</label>
-            <input type="range" id="termPremium" min="0" max="0.03" step="0.001" value="0.01" />
-            <output></output>
-          </div>
-          <div class="param" data-id="retention">
-            <label>Retention rate <small>b</small></label>
-            <input type="range" id="retention" min="0" max="0.9" step="0.01" value="0.35" />
-            <output></output>
-          </div>
-          <div class="param" data-id="egf">
-            <label>Earnings growth factor</label>
-            <input type="range" id="egf" min="0.5" max="2.5" step="0.05" value="1.10" />
-            <output></output>
-          </div>
-          <div class="param" data-id="highGrowthYears">
-            <label>High-growth years <small>two-stage</small></label>
-            <input type="range" id="highGrowthYears" min="0" max="30" step="1" value="0" />
-            <output></output>
-          </div>
-        </section>
+        <details class="panel group" data-group="solow" open>
+          <summary>
+            <span class="group-title">Solow-Swan</span>
+            <span class="group-sub">n and g set the steady state</span>
+            <span class="group-vals" data-vals="n,g"></span>
+            <span class="chev" aria-hidden="true"></span>
+          </summary>
+          <div class="group-body">
+            <div class="param" data-id="n">
+              <div class="param-head">
+                <label for="n">Population growth <small>n</small></label>
+                <span class="val-wrap"><input class="val" type="number" data-for="n" aria-label="Population growth, percent" /><span class="unit">%</span></span>
+              </div>
+              <div class="track"><input type="range" id="n" min="0" max="0.05" step="0.001" value="0.005" /></div>
+            </div>
+            <div class="param" data-id="g">
+              <div class="param-head">
+                <label for="g">Tech progress <small>g</small></label>
+                <span class="val-wrap"><input class="val" type="number" data-for="g" aria-label="Technology progress, percent" /><span class="unit">%</span></span>
+              </div>
+              <div class="track"><input type="range" id="g" min="0" max="0.05" step="0.001" value="0.02" /></div>
+            </div>
 
-        <section class="panel">
-          <h2>Monte Carlo</h2>
-          <p class="hint">Means follow the sliders above. Live, seeded, vectorised.</p>
-          <div class="param" data-id="numSims">
-            <label>Simulations</label>
-            <input type="range" id="numSims" min="500" max="50000" step="500" value="5000" />
-            <output></output>
+            <details class="sub" data-group="solow-path">
+              <summary><span>Convergence path <small>s, δ, α, T — do not move the valuation</small></span><span class="chev" aria-hidden="true"></span></summary>
+              <div class="param" data-id="s">
+                <div class="param-head">
+                  <label for="s">Savings rate <small>s</small></label>
+                  <span class="val-wrap"><input class="val" type="number" data-for="s" aria-label="Savings rate, percent" /><span class="unit">%</span></span>
+                </div>
+                <div class="track"><input type="range" id="s" min="0.01" max="0.6" step="0.01" value="0.20" /></div>
+              </div>
+              <div class="param" data-id="delta">
+                <div class="param-head">
+                  <label for="delta">Depreciation <small>δ</small></label>
+                  <span class="val-wrap"><input class="val" type="number" data-for="delta" aria-label="Depreciation, percent" /><span class="unit">%</span></span>
+                </div>
+                <div class="track"><input type="range" id="delta" min="0" max="0.2" step="0.005" value="0.05" /></div>
+              </div>
+              <div class="param" data-id="alpha">
+                <div class="param-head">
+                  <label for="alpha">Capital elasticity <small>α</small></label>
+                  <span class="val-wrap"><input class="val" type="number" data-for="alpha" aria-label="Capital elasticity" /><span class="unit"></span></span>
+                </div>
+                <div class="track"><input type="range" id="alpha" min="0.1" max="0.7" step="0.01" value="0.35" /></div>
+              </div>
+              <div class="param" data-id="T">
+                <div class="param-head">
+                  <label for="T">Periods <small>T</small></label>
+                  <span class="val-wrap"><input class="val" type="number" data-for="T" aria-label="Simulation periods" /><span class="unit"></span></span>
+                </div>
+                <div class="track"><input type="range" id="T" min="20" max="500" step="10" value="200" /></div>
+              </div>
+            </details>
           </div>
-          <div class="param" data-id="gStd">
-            <label>g std-dev</label>
-            <input type="range" id="gStd" min="0" max="0.01" step="0.0005" value="0.005" />
-            <output></output>
+        </details>
+
+        <details class="panel group" data-group="financial">
+          <summary>
+            <span class="group-title">Financial</span>
+            <span class="group-sub">CAPM → Gordon</span>
+            <span class="group-vals" data-vals="beta,erp,inflation,retention"></span>
+            <span class="chev" aria-hidden="true"></span>
+          </summary>
+          <div class="group-body">
+            <div class="param" data-id="beta">
+              <div class="param-head">
+                <label for="beta">Beta <small>β</small></label>
+                <span class="val-wrap"><input class="val" type="number" data-for="beta" aria-label="Beta" /><span class="unit"></span></span>
+              </div>
+              <div class="track"><input type="range" id="beta" min="0" max="2" step="0.05" value="1.00" /></div>
+            </div>
+            <div class="param" data-id="erp">
+              <div class="param-head">
+                <label for="erp">Equity risk premium</label>
+                <span class="val-wrap"><input class="val" type="number" data-for="erp" aria-label="Equity risk premium, percent" /><span class="unit">%</span></span>
+              </div>
+              <div class="track"><input type="range" id="erp" min="0" max="0.10" step="0.001" value="0.05" /></div>
+            </div>
+            <div class="param" data-id="inflation">
+              <div class="param-head">
+                <label for="inflation">Expected inflation <small>π</small></label>
+                <span class="val-wrap"><input class="val" type="number" data-for="inflation" aria-label="Expected inflation, percent" /><span class="unit">%</span></span>
+              </div>
+              <div class="track"><input type="range" id="inflation" min="0" max="0.08" step="0.001" value="0.02" /></div>
+            </div>
+            <div class="param" data-id="termPremium">
+              <div class="param-head">
+                <label for="termPremium">Term premium</label>
+                <span class="val-wrap"><input class="val" type="number" data-for="termPremium" aria-label="Term premium, percent" /><span class="unit">%</span></span>
+              </div>
+              <div class="track"><input type="range" id="termPremium" min="0" max="0.03" step="0.001" value="0.01" /></div>
+            </div>
+            <div class="param" data-id="retention">
+              <div class="param-head">
+                <label for="retention">Retention rate <small>b</small></label>
+                <span class="val-wrap"><input class="val" type="number" data-for="retention" aria-label="Retention rate, percent" /><span class="unit">%</span></span>
+              </div>
+              <div class="track"><input type="range" id="retention" min="0" max="0.9" step="0.01" value="0.35" /></div>
+            </div>
+            <div class="param" data-id="egf">
+              <div class="param-head">
+                <label for="egf">Earnings growth factor</label>
+                <span class="val-wrap"><input class="val" type="number" data-for="egf" aria-label="Earnings growth factor" /><span class="unit">×</span></span>
+              </div>
+              <div class="track"><input type="range" id="egf" min="0.5" max="2.5" step="0.05" value="1.10" /></div>
+            </div>
+
+            <div class="switch-row">
+              <label class="switch" for="twoStage">
+                <input type="checkbox" id="twoStage" role="switch" />
+                <span class="slider-ui" aria-hidden="true"></span>
+                <span class="switch-text">Two-stage growth <small>bounds earnings growth to nominal GDP after N years</small></span>
+              </label>
+            </div>
+            <div class="param dependent" data-id="highGrowthYears" data-depends="twoStage">
+              <div class="param-head">
+                <label for="highGrowthYears">High-growth years <small>N</small></label>
+                <span class="val-wrap"><input class="val" type="number" data-for="highGrowthYears" aria-label="High-growth years" /><span class="unit">yrs</span></span>
+              </div>
+              <div class="track"><input type="range" id="highGrowthYears" min="1" max="30" step="1" value="5" /></div>
+            </div>
           </div>
-          <div class="param" data-id="inflStd">
-            <label>π std-dev</label>
-            <input type="range" id="inflStd" min="0" max="0.02" step="0.0005" value="0.005" />
-            <output></output>
+        </details>
+
+        <details class="panel group" data-group="mc">
+          <summary>
+            <span class="group-title">Monte Carlo</span>
+            <span class="group-sub">live · seeded · means follow the sliders</span>
+            <span class="group-vals" data-vals="numSims,gStd,inflStd"></span>
+            <span class="chev" aria-hidden="true"></span>
+          </summary>
+          <div class="group-body">
+            <div class="param" data-id="numSims">
+              <div class="param-head">
+                <label for="numSims">Simulations</label>
+                <span class="val-wrap"><input class="val" type="number" data-for="numSims" aria-label="Number of simulations" /><span class="unit"></span></span>
+              </div>
+              <div class="track"><input type="range" id="numSims" min="500" max="50000" step="500" value="5000" /></div>
+            </div>
+            <div class="param" data-id="gStd">
+              <div class="param-head">
+                <label for="gStd">g std-dev</label>
+                <span class="val-wrap"><input class="val" type="number" data-for="gStd" aria-label="Technology growth standard deviation, percent" /><span class="unit">%</span></span>
+              </div>
+              <div class="track"><input type="range" id="gStd" min="0" max="0.01" step="0.0005" value="0.005" /></div>
+            </div>
+            <div class="param" data-id="inflStd">
+              <div class="param-head">
+                <label for="inflStd">π std-dev</label>
+                <span class="val-wrap"><input class="val" type="number" data-for="inflStd" aria-label="Inflation standard deviation, percent" /><span class="unit">%</span></span>
+              </div>
+              <div class="track"><input type="range" id="inflStd" min="0" max="0.02" step="0.0005" value="0.005" /></div>
+            </div>
+            <div class="param" data-id="tpStd">
+              <div class="param-head">
+                <label for="tpStd">Term-premium std-dev</label>
+                <span class="val-wrap"><input class="val" type="number" data-for="tpStd" aria-label="Term premium standard deviation, percent" /><span class="unit">%</span></span>
+              </div>
+              <div class="track"><input type="range" id="tpStd" min="0" max="0.01" step="0.0005" value="0.002" /></div>
+            </div>
+
+            <div class="switch-row">
+              <label class="switch" for="erpUncertain">
+                <input type="checkbox" id="erpUncertain" role="switch" />
+                <span class="slider-ui" aria-hidden="true"></span>
+                <span class="switch-text">ERP uncertainty</span>
+              </label>
+            </div>
+            <div class="param dependent" data-id="erpStd" data-depends="erpUncertain">
+              <div class="param-head">
+                <label for="erpStd">ERP std-dev</label>
+                <span class="val-wrap"><input class="val" type="number" data-for="erpStd" aria-label="Equity risk premium standard deviation, percent" /><span class="unit">%</span></span>
+              </div>
+              <div class="track"><input type="range" id="erpStd" min="0" max="0.03" step="0.0005" value="0.01" /></div>
+            </div>
+
+            <div class="switch-row">
+              <label class="switch" for="corrOn">
+                <input type="checkbox" id="corrOn" role="switch" />
+                <span class="slider-ui" aria-hidden="true"></span>
+                <span class="switch-text">Correlate π and term premium</span>
+              </label>
+            </div>
+            <div class="param dependent" data-id="rho" data-depends="corrOn">
+              <div class="param-head">
+                <label for="rho">Corr(π, TP) <small>ρ</small></label>
+                <span class="val-wrap"><input class="val" type="number" data-for="rho" aria-label="Correlation between inflation and term premium" /><span class="unit"></span></span>
+              </div>
+              <div class="track"><input type="range" id="rho" min="-0.9" max="0.9" step="0.05" value="0.3" /></div>
+            </div>
+
+            <div class="param inline" data-id="seed">
+              <div class="param-head">
+                <label for="seed">Seed</label>
+                <input type="number" id="seed" min="0" max="999999" step="1" value="42" />
+              </div>
+            </div>
           </div>
-          <div class="param" data-id="tpStd">
-            <label>Term-premium std-dev</label>
-            <input type="range" id="tpStd" min="0" max="0.01" step="0.0005" value="0.002" />
-            <output></output>
-          </div>
-          <div class="param" data-id="erpStd">
-            <label>ERP std-dev</label>
-            <input type="range" id="erpStd" min="0" max="0.03" step="0.0005" value="0" />
-            <output></output>
-          </div>
-          <div class="param" data-id="rho">
-            <label>Corr(π, term premium) <small>ρ</small></label>
-            <input type="range" id="rho" min="-0.9" max="0.9" step="0.05" value="0" />
-            <output></output>
-          </div>
-          <div class="param" data-id="seed">
-            <label>Seed</label>
-            <input type="number" id="seed" min="0" max="999999" step="1" value="42" />
-            <output></output>
-          </div>
-        </section>
+        </details>
+
+        <p class="hint sidebar-foot" id="obs-foot"></p>
       </aside>
 
       <section class="content">
@@ -152,14 +251,17 @@
           <div class="kpi">
             <span>Real growth</span>
             <strong id="kpi-real">—</strong>
+            <small class="kpi-obs" data-kpi="kpi-real"></small>
           </div>
           <div class="kpi">
             <span>Nominal growth</span>
             <strong id="kpi-nominal">—</strong>
+            <small class="kpi-obs" data-kpi="kpi-nominal"></small>
           </div>
           <div class="kpi">
             <span>Risk-free rate</span>
             <strong id="kpi-rf">—</strong>
+            <small class="kpi-obs" data-kpi="kpi-rf"></small>
           </div>
           <div class="kpi">
             <span>Required return</span>
@@ -176,10 +278,11 @@
           <div class="kpi highlight">
             <span>Justified forward P/E</span>
             <strong id="kpi-pe">—</strong>
+            <small class="kpi-obs" data-kpi="kpi-pe"></small>
           </div>
         </section>
         <p id="pe-note" class="note" hidden>
-          ⚠ Earnings are assumed to outgrow nominal GDP <em>forever</em> (factor &gt; 1, single stage). Set high-growth years &gt; 0 to bound it.
+          ⚠ Earnings are assumed to outgrow nominal GDP <em>forever</em> (factor &gt; 1, single stage). Switch on two-stage growth to bound it.
         </p>
 
         <section class="implied panel">
@@ -187,6 +290,7 @@
             <h2>What does the market imply?</h2>
             <label for="targetPE">Observed forward P/E</label>
             <input type="number" id="targetPE" min="1" max="100" step="0.5" value="18" />
+            <div class="param" data-id="targetPE"></div>
           </div>
           <div class="implied-out">
             <span>Implied tech progress g</span>
@@ -217,8 +321,8 @@
           </div>
         </section>
 
-        <section class="formulae">
-          <h3>Model</h3>
+        <details class="formulae">
+          <summary><h3>Model</h3><span class="chev" aria-hidden="true"></span></summary>
           <ul>
             <li><code>Y = K^α · (A·L)^(1-α)</code> &nbsp;— Cobb-Douglas production</li>
             <li><code>K_{t+1} = (1 − δ)·K_t + s·Y_t</code> &nbsp;— capital accumulation (textbook)</li>
@@ -231,10 +335,13 @@
           <p class="muted">
             Educational tool — not investment advice. Steady-state Y/K = ((1+n)(1+g) − (1−δ)) / s.
           </p>
-        </section>
+        </details>
       </section>
     </main>
 
+    <div id="obs-tip" class="obs-tip" role="tooltip" hidden></div>
+
+    <script src="./observables.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

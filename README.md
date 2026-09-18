@@ -30,6 +30,8 @@ or just open the file. The `web/` folder is self-contained apart from Plotly (pa
 - **Tornado**: one-at-a-time ± shocks on all eight drivers, ranked by P/E swing.
 - **Monte Carlo**: live, seeded, vectorised; reports μ, σ, P5–P95 and the **share of invalid draws**; optional ERP uncertainty and inflation/term-premium correlation.
 - **Export JSON**: parameters, valuation, tornado, implied values and Monte Carlo summary in one file.
+- **Parameter sidebar that fits one screen**: the three groups (Solow-Swan, Financial, Monte Carlo) form an exclusive accordion whose collapsed headers show their key values; convergence-path settings sit in a nested "advanced" fold. Every value can be typed as well as dragged, two-stage growth / ERP uncertainty / inflation–term-premium correlation are switches, and on narrow screens the sidebar becomes a drawer.
+- **Latest observed values**: each input carries a note with its most recent observable counterpart (US / S&P 500), its source and as-of date, a ▲ marker on the slider, and a one-click apply; "Use observed" applies them all. Inputs with no observable counterpart say so. The numbers live in `web/observables.js`; `tests/test_observables.py` checks they stay inside the slider ranges.
 - Dark / light mode, reset to defaults.
 
 `web/app.js` is a line-for-line port of `src/economics_models/core.py`. Parity is enforced by `tests/test_js_parity.py`, which runs the JS under Node.js on identical inputs (including injected Monte Carlo draws) and compares every number.

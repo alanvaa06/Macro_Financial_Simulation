@@ -434,7 +434,7 @@
 
   const formats = {
     s: { kind: "pct", d: 1 }, n: { kind: "pct", d: 2 }, g: { kind: "pct", d: 2 },
-    delta: { kind: "pct", d: 1 }, alpha: { kind: "pct", d: 0 }, T: { kind: "int" },
+    delta: { kind: "pct", d: 1 }, alpha: { kind: "num", d: 2 }, T: { kind: "int" },
     beta: { kind: "num", d: 2 }, erp: { kind: "pct", d: 2 },
     inflation: { kind: "pct", d: 2 }, termPremium: { kind: "pct", d: 2 },
     retention: { kind: "pct", d: 0 }, egf: { kind: "num", d: 2 },
@@ -453,6 +453,16 @@
     return Number(value).toFixed(f.d);
   }
 
+  // Sliders that are only active while a switch is on. Off => the model sees 0,
+  // but the slider keeps its own position so switching back on restores it.
+  const SWITCHES = { twoStage: "highGrowthYears", erpUncertain: "erpStd", corrOn: "rho" };
+  const SLIDER_DEFAULTS = { highGrowthYears: 5, erpStd: 0.01, rho: 0.3 };
+
+  function switchOn(id) {
+    const el = document.getElementById(id);
+    return !!(el && el.checked);
+  }
+
   function readControls() {
     const v = {};
     Object.keys(defaults).forEach((k) => {
@@ -460,11 +470,76 @@
       const parsed = el ? parseFloat(el.value) : NaN;
       v[k] = Number.isFinite(parsed) ? parsed : defaults[k];
     });
+    Object.keys(SWITCHES).forEach((sw) => {
+      if (!switchOn(sw)) v[SWITCHES[sw]] = 0;
+    });
     v.A0 = defaults.A0;
     v.L0 = defaults.L0;
     v.K0 = defaults.K0;
     v.T = Math.round(v.T);
     return v;
+  }
+
+  // ---------- Editable value boxes (display units <-> model units) ----------
+
+  function toDisplay(id, value) {
+    const f = formats[id] || {};
+    if (f.kind === "pct") return (value * 100).toFixed(f.d);
+    if (f.kind === "int" || f.kind === "years") return String(Math.round(value));
+    return Number(value).toFixed(f.d == null ? 2 : f.d);
+  }
+
+  function fromDisplay(id, text) {
+    const parsed = parseFloat(text);
+    if (!Number.isFinite(parsed)) return null;
+    const f = formats[id] || {};
+    return f.kind === "pct" ? parsed / 100 : parsed;
+  }
+
+  function clampToRange(range, value) {
+    const min = parseFloat(range.min);
+    const max = parseFloat(range.max);
+    if (Number.isFinite(min) && value < min) return min;
+    if (Number.isFinite(max) && value > max) return max;
+    return value;
+  }
+
+  function setControl(id, value) {
+    const range = document.getElementById(id);
+    if (!range) return;
+    range.value = clampToRange(range, value);
+  }
+
+  function initValueBoxes() {
+    document.querySelectorAll(".param .val[data-for]").forEach((box) => {
+      const id = box.dataset.for;
+      const range = document.getElementById(id);
+      if (!range) return;
+      const f = formats[id] || {};
+      const step = parseFloat(range.step) || 1;
+      box.step = f.kind === "pct" ? step * 100 : step;
+      box.min = f.kind === "pct" ? parseFloat(range.min) * 100 : range.min;
+      box.max = f.kind === "pct" ? parseFloat(range.max) * 100 : range.max;
+      if (f.kind === "int" && parseFloat(range.max) >= 10000) box.classList.add("wide");
+      const commit = () => {
+        const v = fromDisplay(id, box.value);
+        if (v == null) {
+          box.value = toDisplay(id, parseFloat(range.value));
+          return;
+        }
+        setControl(id, v);
+        refreshActive();
+      };
+      box.addEventListener("change", commit);
+      box.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit();
+          box.blur();
+        }
+      });
+      box.addEventListener("focus", () => box.select());
+    });
   }
 
   function finFrom(state) {
@@ -486,11 +561,134 @@
   }
 
   function syncOutputs(state) {
-    document.querySelectorAll(".param").forEach((p) => {
+    document.querySelectorAll(".param[data-id]").forEach((p) => {
       const id = p.dataset.id;
-      const out = p.querySelector("output");
-      if (out) out.textContent = fmt(id, state[id]);
+      const box = p.querySelector(".val[data-for]");
+      const range = document.getElementById(id);
+      if (box && range && document.activeElement !== box) box.value = toDisplay(id, parseFloat(range.value));
+      const obs = p.querySelector(".obs[data-obs-value]");
+      if (obs && range) {
+        const target = parseFloat(obs.dataset.obsValue);
+        const step = parseFloat(range.step) || 1;
+        obs.classList.toggle("at-obs", Math.abs(parseFloat(range.value) - target) < step / 2);
+      }
     });
+    Object.keys(SWITCHES).forEach((sw) => {
+      const dep = document.querySelector(`.param[data-depends="${sw}"]`);
+      if (dep) dep.classList.toggle("off", !switchOn(sw));
+    });
+    document.querySelectorAll(".group-vals[data-vals]").forEach((el) => {
+      el.innerHTML = el.dataset.vals
+        .split(",")
+        .map((id) => `${SHORT_LABELS[id] || id} <b>${fmt(id, state[id])}</b>`)
+        .join(" · ");
+    });
+  }
+
+  const SHORT_LABELS = {
+    n: "n", g: "g", beta: "β", erp: "ERP", inflation: "π", retention: "b",
+    numSims: "sims", gStd: "σg", inflStd: "σπ",
+  };
+
+  // ---------- Latest observable values ----------
+
+  const observables = (typeof window !== "undefined" && window.MacroFinObservables) || null;
+  const obsTip = () => document.getElementById("obs-tip");
+
+  function obsTipShow(target, html) {
+    const tip = obsTip();
+    if (!tip) return;
+    tip.innerHTML = html;
+    tip.hidden = false;
+    const r = target.getBoundingClientRect();
+    const w = tip.offsetWidth;
+    const h = tip.offsetHeight;
+    let left = r.left;
+    let top = r.bottom + 6;
+    if (left + w > window.innerWidth - 8) left = Math.max(8, window.innerWidth - w - 8);
+    if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+    tip.style.left = left + "px";
+    tip.style.top = top + "px";
+  }
+
+  function obsTipHide() {
+    const tip = obsTip();
+    if (tip) tip.hidden = true;
+  }
+
+  function obsLabel(id, entry) {
+    return entry.label || fmt(id, entry.value);
+  }
+
+  function renderObservables() {
+    if (!observables) return;
+    const asOf = document.getElementById("obs-asof");
+    if (asOf) asOf.textContent = `Observed values: ${observables.region}, as of ${observables.asOf}. Click one to apply it.`;
+    const foot = document.getElementById("obs-foot");
+    if (foot) foot.textContent = "▲ on a slider marks the latest observed value. Sources open on hover.";
+
+    document.querySelectorAll(".param[data-id]").forEach((p) => {
+      const id = p.dataset.id;
+      const range = document.getElementById(id);
+      const entry = observables.params[id];
+      const na = observables.notApplicable && observables.notApplicable[id];
+      if (!entry && !na) return;
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "obs";
+      if (entry) {
+        btn.dataset.obsValue = String(entry.value);
+        const src = `${entry.source}${entry.asOf && entry.asOf !== "—" ? ", " + entry.asOf : ""}`;
+        btn.innerHTML =
+          `<span class="dot"></span><span class="obs-val">${obsLabel(id, entry)}</span>` +
+          `<span class="obs-src">${src}</span><span class="obs-apply">apply ↵</span>`;
+        btn.setAttribute("aria-label", `Latest observed ${obsLabel(id, entry)} (${src}). Apply.`);
+        btn.addEventListener("click", () => {
+          setControl(id, entry.value);
+          refreshActive();
+        });
+        const tipHtml = () => {
+          const link = entry.url ? `<span class="tip-src">Source: ${entry.source} — ${entry.url.replace(/^https?:\/\//, "")}</span>` : `<span class="tip-src">Source: ${entry.source}</span>`;
+          const kind = entry.derived ? " (derived)" : "";
+          return `<b>${obsLabel(id, entry)}</b> · ${entry.asOf}${kind}<br>${entry.note || ""}${link}`;
+        };
+        btn.addEventListener("mouseenter", () => obsTipShow(btn, tipHtml()));
+        btn.addEventListener("focus", () => obsTipShow(btn, tipHtml()));
+        btn.addEventListener("mouseleave", obsTipHide);
+        btn.addEventListener("blur", obsTipHide);
+
+        if (range && p.querySelector(".track")) {
+          const min = parseFloat(range.min);
+          const max = parseFloat(range.max);
+          const pos = Math.min(1, Math.max(0, (entry.value - min) / (max - min)));
+          const mark = document.createElement("span");
+          mark.className = "obs-mark";
+          mark.style.setProperty("--obs-pos", pos.toFixed(4));
+          mark.title = `Observed: ${obsLabel(id, entry)}`;
+          p.querySelector(".track").appendChild(mark);
+        }
+      } else {
+        btn.classList.add("na");
+        btn.tabIndex = -1;
+        btn.innerHTML = `<span class="dot"></span><span class="obs-src">No observable — ${na}</span>`;
+        btn.title = na;
+      }
+      p.appendChild(btn);
+    });
+
+    document.querySelectorAll(".kpi-obs[data-kpi]").forEach((el) => {
+      const entry = observables.kpis && observables.kpis[el.dataset.kpi];
+      if (!entry) return;
+      el.innerHTML = `Observed <b>${entry.label}</b> · ${entry.short || entry.source}`;
+      el.title = `${entry.source}${entry.asOf ? " (" + entry.asOf + ")" : ""}${entry.url ? " — " + entry.url : ""}`;
+    });
+  }
+
+  function applyObserved() {
+    if (!observables) return;
+    Object.keys(observables.params).forEach((id) => setControl(id, observables.params[id].value));
+    refreshActive();
   }
 
   function setText(id, text) {
@@ -761,9 +959,63 @@
   function setDefaults() {
     Object.keys(defaults).forEach((k) => {
       const el = document.getElementById(k);
-      if (el) el.value = defaults[k];
+      if (el) el.value = SLIDER_DEFAULTS[k] != null ? SLIDER_DEFAULTS[k] : defaults[k];
+    });
+    Object.keys(SWITCHES).forEach((sw) => {
+      const el = document.getElementById(sw);
+      if (el) el.checked = defaults[SWITCHES[sw]] !== 0;
     });
     refreshActive();
+  }
+
+  // ---------- Sidebar: collapsible groups + mobile drawer ----------
+
+  // Top-level groups behave as an exclusive accordion so the sidebar never
+  // grows past one screen; the collapsed headers show their key values.
+  const STORE_KEY = "macrofin.openGroup";
+
+  function initGroups() {
+    const groups = Array.from(document.querySelectorAll("details.group[data-group]"));
+    let saved = null;
+    try {
+      saved = window.localStorage && window.localStorage.getItem(STORE_KEY);
+    } catch (e) {
+      /* private mode etc. */
+    }
+    if (saved && groups.some((g) => g.dataset.group === saved)) {
+      groups.forEach((g) => (g.open = g.dataset.group === saved));
+    }
+    groups.forEach((d) => {
+      d.addEventListener("toggle", () => {
+        if (!d.open) return;
+        groups.forEach((o) => {
+          if (o !== d && o.open) o.open = false;
+        });
+        try {
+          if (window.localStorage) window.localStorage.setItem(STORE_KEY, d.dataset.group);
+        } catch (e) {
+          /* ignore */
+        }
+      });
+    });
+  }
+
+  function initDrawer() {
+    const sidebar = document.getElementById("sidebar");
+    const toggle = document.getElementById("params-toggle");
+    const backdrop = document.getElementById("sidebar-backdrop");
+    if (!sidebar || !toggle || !backdrop) return;
+    const setOpen = (open) => {
+      sidebar.classList.toggle("open", open);
+      backdrop.hidden = !open;
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.textContent = open ? "Close" : "Parameters";
+    };
+    toggle.addEventListener("click", () => setOpen(!sidebar.classList.contains("open")));
+    backdrop.addEventListener("click", () => setOpen(false));
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && sidebar.classList.contains("open")) setOpen(false);
+    });
   }
 
   function init() {
@@ -771,11 +1023,25 @@
       const el = document.getElementById(k);
       if (el) el.addEventListener("input", debouncedRefresh);
     });
+    Object.keys(SWITCHES).forEach((sw) => {
+      const el = document.getElementById(sw);
+      if (el) el.addEventListener("change", refreshActive);
+    });
+    document.querySelectorAll(".param label").forEach((l) => (l.title = l.textContent.trim()));
+    initValueBoxes();
+    renderObservables();
+    initGroups();
+    initDrawer();
     document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
     const reset = document.getElementById("reset-btn");
     if (reset) reset.addEventListener("click", setDefaults);
     const exp = document.getElementById("export-btn");
     if (exp) exp.addEventListener("click", exportJson);
+    const applyObs = document.getElementById("apply-observed");
+    if (applyObs) {
+      if (observables) applyObs.addEventListener("click", applyObserved);
+      else applyObs.hidden = true;
+    }
     if (window.matchMedia) {
       window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", refreshActive);
     }
